@@ -27,13 +27,14 @@ class UnlockView(View):
         super().__init__(timeout=None)
         self.channel = channel
 
-    @discord.ui.button(label="Unlock", style=discord.ButtonStyle.danger)
+    @discord.ui.button(label="Unlock", style=discord.ButtonStyle.danger, emoji="🔐")
     async def unlock_button(self, interaction: discord.Interaction, button: Button):
         await unlock_channel(self.channel)
         await interaction.response.send_message("The channel has been unlocked.", ephemeral=True)
         
         # Update the button to show it has been used
         button.label = "Unlocked"
+        button.emoji = "🔓"
         button.style = discord.ButtonStyle.success
         button.disabled = True
         await interaction.message.edit(view=self)
