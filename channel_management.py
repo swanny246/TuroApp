@@ -81,19 +81,17 @@ class ChannelManagement(commands.Cog):
         with open(config_path, 'w') as f:
             json.dump(config, f, indent=4)
 
-    async def lock_channel(self, channel, lock_delay):
-        # Calculate the Unix timestamp for the lock time
-        lock_time = datetime.now() + timedelta(seconds=lock_delay)
-        lock_timestamp = int(lock_time.timestamp())
-
+    async def lock_channel(self, channel, lock_duration):
         # Notify the channel that it will be locked soon with a countdown
+        lock_time = datetime.now() + timedelta(seconds=default_lock_delay)
+        lock_timestamp = int(lock_time.timestamp())
         countdown_message = await channel.send(f"The channel will be locked <t:{lock_timestamp}:R>.")
         
-        # Wait for the timeout duration to check if there are any new messages
+        # Wait for the lock delay duration
         try:
             await self.bot.wait_for(
                 'message', 
-                timeout=lock_delay, 
+                timeout=default_lock_delay, 
                 check=lambda m: (
                     m.channel == channel and 
                     m.author.id == poketwo_bot_id and 
@@ -105,7 +103,7 @@ class ChannelManagement(commands.Cog):
             print("Interrupted by a message containing 'Congratulations' and 'You caught a Level', not locking the channel!")
         except asyncio.TimeoutError:
             # Lock the channel for the Poketwo bot
-            bot_member = channel.guild.get_member(poketwo_bot_id)  # Ensure bot_member is fetched correctly
+            bot_member = channel.guild.get_member(poketwo_bot_id)
             print(f'Bot member: {bot_member}')
             
             if bot_member is None:
@@ -123,10 +121,11 @@ class ChannelManagement(commands.Cog):
                 # Edit the countdown message to say the channel has been locked and add the unlock button
                 await countdown_message.edit(content="The channel has been locked.", view=view)
 
-                # Schedule auto unlock after shiny_lock_duration
+                # Register the channel as locked
                 self.locked_channels[channel.id] = countdown_message
-                server_config = self.get_server_config(channel.guild.id)
-                self.bot.loop.create_task(self.auto_unlock_channel(channel, server_config['shiny_lock_duration']))
+
+                # Schedule auto unlock after lock_duration
+                self.bot.loop.create_task(self.auto_unlock_channel(channel, lock_duration))
 
     async def auto_unlock_channel(self, channel, delay):
         await asyncio.sleep(delay)
@@ -158,22 +157,22 @@ class ChannelManagement(commands.Cog):
                             print(f'Hunt in {message.channel.name} on {message.guild.name}!')
                             server_config = self.get_server_config(message.guild.id)
                             if keyword == "rare ping":
-                                lock_delay = server_config.get('rare_lock_duration', default_rare_lock_duration)
+                                lock_duration = server_config.get('rare_lock_duration', default_rare_lock_duration)
                             elif keyword == "regional ping":
-                                lock_delay = server_config.get('regional_lock_duration', default_regional_lock_duration)
+                                lock_duration = server_config.get('regional_lock_duration', default_regional_lock_duration)
                             elif keyword == "collection pings":
-                                lock_delay = server_config.get('collection_lock_duration', default_collection_lock_duration)
+                                lock_duration = server_config.get('collection_lock_duration', default_collection_lock_duration)
                             else:
-                                lock_delay = server_config['lock_delay']
-                            await self.lock_channel(message.channel, lock_delay)
+                                lock_duration = server_config.get('shiny_lock_duration', default_shiny_lock_duration)
+                            await self.lock_channel(message.channel, lock_duration)
                     break  # Exit the loop once a keyword is found to avoid redundant checks
 
     @commands.hybrid_command(name="lock", description="Locks the current channel you're in, if unlocked")
     async def lock(self, ctx):
         """Locks the current channel until manually unlocked."""
         await ctx.send("Manually locking channel...", ephemeral=True)  # Initial response to prevent timeout
-        server_config = self.get_server_config(ctx.guild.id)
-        await self.lock_channel(ctx.channel, 0)
+        lock_duration = 86400  # Default to 24 hours
+        await self.lock_channel(ctx.channel, lock_duration)
 
     @commands.hybrid_command(name="unlock", description="Unlocks the current channel you're in, if locked")
     async def unlock(self, ctx):
@@ -211,7 +210,7 @@ class ChannelManagement(commands.Cog):
         collection_lock_duration = collection_lock_duration if collection_lock_duration is not None else server_config['collection_lock_duration']
 
         self.save_server_config(ctx.guild.id, lock_delay, shiny_lock_duration, rare_lock_duration, regional_lock_duration, collection_lock_duration)
-        await ctx.send(f"Timeout duration set to {lock_delay} seconds, auto unlock duration set to {shiny_lock_duration} seconds, rare lock duration set to {rare_lock_duration} seconds, regional lock duration set to {regional_lock_duration} seconds, and collection lock duration set to {collection_lock_duration} seconds.")
+        await ctx.send(f"Lock delay set to {lock_delay} seconds, auto unlock duration set to {shiny_lock_duration} seconds, rare lock duration set to {rare_lock_duration} seconds, regional lock duration set to {regional_lock_duration} seconds, and collection lock duration set to {collection_lock_duration} seconds.")
 
     @set_timers.error
     async def set_timers_error(ctx, error):
