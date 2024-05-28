@@ -1,4 +1,6 @@
-import discord, json, os
+import discord
+import json
+import os
 from discord.ext import commands
 from discord.ui import Button, View
 from discord import app_commands
@@ -42,7 +44,7 @@ class UnlockView(View):
 async def unlock_channel(channel):
     # Unlock the channel for the Poketwo bot
     bot_member = channel.guild.get_member(poketwo_bot_id)
-    if bot_member == None:
+    if bot_member is None:
         await channel.send(":warning: Unable to find Pokétwo bot to let it back in, check that the bot is a member of the server! Otherwise, I may be missing some permissions.")
     else:
         overwrite = channel.overwrites_for(bot_member)
@@ -80,17 +82,17 @@ class ChannelManagement(commands.Cog):
         # Wait for the timeout duration to check if there are any new messages
         try:
             await self.bot.wait_for(
-            'message', 
-            timeout=lock_delay, 
-            check=lambda m: (
-                m.channel == channel and 
-                m.author.id == poketwo_bot_id and 
-                "Congratulations" in m.content and 
-                "You caught a Level" in m.content
+                'message', 
+                timeout=lock_delay, 
+                check=lambda m: (
+                    m.channel == channel and 
+                    m.author.id == poketwo_bot_id and 
+                    "Congratulations" in m.content and 
+                    "You caught a Level" in m.content
+                )
             )
-        )
             await countdown_message.edit(content="Interrupted by a catch, not locking the channel!")
-            print("Interrupted by a message containing '@Pokétwo#8236 c', not locking the channel!")
+            print("Interrupted by a message containing 'Congratulations' and 'You caught a Level', not locking the channel!")
         except asyncio.TimeoutError:
             # Lock the channel for the Poketwo bot
             bot_member = channel.guild.get_member(poketwo_bot_id)  # Ensure bot_member is fetched correctly
@@ -114,9 +116,9 @@ class ChannelManagement(commands.Cog):
                 # Schedule auto unlock after shiny_lock_duration
                 self.locked_channels[channel.id] = countdown_message
                 server_config = self.get_server_config(channel.guild.id)
-                self.bot.loop.create_task(self.auto_lock_channel(channel, server_config['shiny_lock_duration']))
+                self.bot.loop.create_task(self.auto_unlock_channel(channel, server_config['shiny_lock_duration']))
 
-    async def auto_lock_channel(self, channel, delay):
+    async def auto_unlock_channel(self, channel, delay):
         await asyncio.sleep(delay)
         if channel.id in self.locked_channels:
             await unlock_channel(channel)
@@ -130,21 +132,27 @@ class ChannelManagement(commands.Cog):
             keywords = ["rare ping", "regional ping", "collection pings", "shiny hunt pings"]  # Adjusted the list of keywords
 
             # Check if any of the keywords are present in the message content
-            if any(keyword in content for keyword in keywords) and "@" in content:
-                print(f'Keyword detected in message: {content}')
-                bot_member = message.channel.guild.get_member(poketwo_bot_id)
-                print(f'Bot member: {bot_member}')
-                if bot_member is None:
-                    await message.channel.send(":warning: Unable to find Pokétwo bot to lock it out, check that the bot is a member of the server! Otherwise, I may be missing some permissions.")
-                else:
-                    overwrite = message.channel.overwrites_for(bot_member)
-                    if overwrite.send_messages is False and overwrite.read_messages is False:
-                        await message.channel.send("The channel is already locked.")
-                        return
+            for keyword in keywords:
+                if keyword in content and "@" in content:
+                    print(f'Keyword detected in message: {content}')
+                    bot_member = message.channel.guild.get_member(poketwo_bot_id)
+                    print(f'Bot member: {bot_member}')
+                    if bot_member is None:
+                        await message.channel.send(":warning: Unable to find Pokétwo bot to lock it out, check that the bot is a member of the server! Otherwise, I may be missing some permissions.")
                     else:
-                        print(f'Hunt in {message.channel.name} on {message.guild.name}!')  # You might need to adjust this line if `channel` is not defined here
-                        server_config = self.get_server_config(message.guild.id)
-                        await self.lock_channel(message.channel, server_config['lock_delay'])
+                        overwrite = message.channel.overwrites_for(bot_member)
+                        if overwrite.send_messages is False and overwrite.read_messages is False:
+                            await message.channel.send("The channel is already locked.")
+                            return
+                        else:
+                            print(f'Hunt in {message.channel.name} on {message.guild.name}!')
+                            server_config = self.get_server_config(message.guild.id)
+                            if keyword in ["rare ping", "regional ping", "collection pings"]:
+                                lock_delay = server_config.get('special_lock_delay', default_lock_delay)
+                            else:
+                                lock_delay = server_config['lock_delay']
+                            await self.lock_channel(message.channel, lock_delay)
+                    break  # Exit the loop once a keyword is found to avoid redundant checks
 
     @commands.hybrid_command(name="lock", description="Locks the current channel you're in, if unlocked")
     async def lock(self, ctx):
@@ -157,8 +165,8 @@ class ChannelManagement(commands.Cog):
     async def unlock(self, ctx):
         """Unlocks the current channel"""
         bot_member = ctx.channel.guild.get_member(poketwo_bot_id)
-        if bot_member == None:
-            await channel.send(":warning: Unable to find Pokétwo bot to let it back in, check that the bot is a member of the server! Otherwise, I may be missing some permissions.")
+        if bot_member is None:
+            await ctx.channel.send(":warning: Unable to find Pokétwo bot to let it back in, check that the bot is a member of the server! Otherwise, I may be missing some permissions.")
         else:
             overwrite = ctx.channel.overwrites_for(bot_member)
             if overwrite.send_messages is not False and overwrite.read_messages is not False:
@@ -175,7 +183,6 @@ class ChannelManagement(commands.Cog):
         lock_delay="How many seconds before a channel locks.",
         shiny_lock_duration="How many seconds before a channel auto-unlocks (3600 = one hour)"
     )
-    
     async def set_timers(self, ctx, lock_delay: int, shiny_lock_duration: int):
         """Sets the timeout durations for this server. Timeout = how long before a channel locks, Auto unlock = how long a channel will stay locked for."""
         self.save_server_config(ctx.guild.id, lock_delay, shiny_lock_duration)
