@@ -173,7 +173,7 @@ class ChannelManagement(commands.Cog):
         """Locks the current channel until manually unlocked."""
         await ctx.send("Manually locking channel...", ephemeral=True)  # Initial response to prevent timeout
         server_config = self.get_server_config(ctx.guild.id)
-        await self.lock_channel(ctx.channel, server_config['lock_delay'])
+        await self.lock_channel(ctx.channel, 0)
 
     @commands.hybrid_command(name="unlock", description="Unlocks the current channel you're in, if locked")
     async def unlock(self, ctx):
