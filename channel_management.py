@@ -23,6 +23,9 @@ poketwo_bot_id = config['poketwo_bot_id']
 # Default timeout durations (will be overridden by server-specific settings)
 default_lock_delay = config['lock_delay']
 default_shiny_lock_duration = config['shiny_lock_duration']
+default_rare_lock_duration = config['rare_lock_duration']
+default_regional_lock_duration = config['regional_lock_duration']
+default_collection_lock_duration = config['collection_lock_duration']
 
 class UnlockView(View):
     def __init__(self, channel):
@@ -58,15 +61,22 @@ class ChannelManagement(commands.Cog):
         self.locked_channels = {}
 
     def get_server_config(self, guild_id):
-        return config['server_configs'].get(str(guild_id), {
+        default_config = {
             'lock_delay': default_lock_delay,
-            'shiny_lock_duration': default_shiny_lock_duration
-        })
+            'shiny_lock_duration': default_shiny_lock_duration,
+            'rare_lock_duration': default_rare_lock_duration,
+            'regional_lock_duration': default_regional_lock_duration,
+            'collection_lock_duration': default_collection_lock_duration,
+        }
+        return {**default_config, **config['server_configs'].get(str(guild_id), {})}
 
-    def save_server_config(self, guild_id, lock_delay, shiny_lock_duration):
+    def save_server_config(self, guild_id, lock_delay, shiny_lock_duration, rare_lock_duration, regional_lock_duration, collection_lock_duration):
         config['server_configs'][str(guild_id)] = {
             'lock_delay': lock_delay,
-            'shiny_lock_duration': shiny_lock_duration
+            'shiny_lock_duration': shiny_lock_duration,
+            'rare_lock_duration': rare_lock_duration,
+            'regional_lock_duration': regional_lock_duration,
+            'collection_lock_duration': collection_lock_duration,
         }
         with open(config_path, 'w') as f:
             json.dump(config, f, indent=4)
@@ -147,8 +157,12 @@ class ChannelManagement(commands.Cog):
                         else:
                             print(f'Hunt in {message.channel.name} on {message.guild.name}!')
                             server_config = self.get_server_config(message.guild.id)
-                            if keyword in ["rare ping", "regional ping", "collection pings"]:
-                                lock_delay = server_config.get('special_lock_delay', default_lock_delay)
+                            if keyword == "rare ping":
+                                lock_delay = server_config.get('rare_lock_duration', default_rare_lock_duration)
+                            elif keyword == "regional ping":
+                                lock_delay = server_config.get('regional_lock_duration', default_regional_lock_duration)
+                            elif keyword == "collection pings":
+                                lock_delay = server_config.get('collection_lock_duration', default_collection_lock_duration)
                             else:
                                 lock_delay = server_config['lock_delay']
                             await self.lock_channel(message.channel, lock_delay)
@@ -181,13 +195,24 @@ class ChannelManagement(commands.Cog):
     @commands.has_guild_permissions(manage_guild=True)
     @app_commands.describe(
         lock_delay="How many seconds before a channel locks.",
-        shiny_lock_duration="How many seconds before a channel auto-unlocks (3600 = one hour)"
+        shiny_lock_duration="How many seconds before a channel auto-unlocks (3600 = one hour)",
+        rare_lock_duration="How many seconds before a channel locks after a rare ping",
+        regional_lock_duration="How many seconds before a channel locks after a regional ping",
+        collection_lock_duration="How many seconds before a channel locks after a collection ping"
     )
-    async def set_timers(self, ctx, lock_delay: int, shiny_lock_duration: int):
-        """Sets the timeout durations for this server. Timeout = how long before a channel locks, Auto unlock = how long a channel will stay locked for."""
-        self.save_server_config(ctx.guild.id, lock_delay, shiny_lock_duration)
-        await ctx.send(f"Timeout duration set to {lock_delay} seconds and auto unlock duration set to {shiny_lock_duration} seconds.")
-        
+    async def set_timers(self, ctx, lock_delay: int = None, shiny_lock_duration: int = None, rare_lock_duration: int = None, regional_lock_duration: int = None, collection_lock_duration: int = None):
+        """Sets the timeout durations for this server."""
+        server_config = self.get_server_config(ctx.guild.id)
+
+        lock_delay = lock_delay if lock_delay is not None else server_config['lock_delay']
+        shiny_lock_duration = shiny_lock_duration if shiny_lock_duration is not None else server_config['shiny_lock_duration']
+        rare_lock_duration = rare_lock_duration if rare_lock_duration is not None else server_config['rare_lock_duration']
+        regional_lock_duration = regional_lock_duration if regional_lock_duration is not None else server_config['regional_lock_duration']
+        collection_lock_duration = collection_lock_duration if collection_lock_duration is not None else server_config['collection_lock_duration']
+
+        self.save_server_config(ctx.guild.id, lock_delay, shiny_lock_duration, rare_lock_duration, regional_lock_duration, collection_lock_duration)
+        await ctx.send(f"Timeout duration set to {lock_delay} seconds, auto unlock duration set to {shiny_lock_duration} seconds, rare lock duration set to {rare_lock_duration} seconds, regional lock duration set to {regional_lock_duration} seconds, and collection lock duration set to {collection_lock_duration} seconds.")
+
     @set_timers.error
     async def set_timers_error(ctx, error):
         if isinstance(error, MissingPermissions):
