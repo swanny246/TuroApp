@@ -20,7 +20,7 @@ poketwo_bot_id = config['poketwo_bot_id']
 
 # Default timeout durations (will be overridden by server-specific settings)
 default_lock_delay = config['lock_delay']
-default_auto_unlock_duration = config['auto_unlock_duration']
+default_auto_lock_duration = config['auto_lock_duration']
 
 class UnlockView(View):
     def __init__(self, channel):
@@ -57,13 +57,13 @@ class ChannelManagement(commands.Cog):
     def get_server_config(self, guild_id):
         return config['server_configs'].get(str(guild_id), {
             'lock_delay': default_lock_delay,
-            'auto_unlock_duration': default_auto_unlock_duration
+            'auto_lock_duration': default_auto_lock_duration
         })
 
-    def save_server_config(self, guild_id, lock_delay, auto_unlock_duration):
+    def save_server_config(self, guild_id, lock_delay, auto_lock_duration):
         config['server_configs'][str(guild_id)] = {
             'lock_delay': lock_delay,
-            'auto_unlock_duration': auto_unlock_duration
+            'auto_lock_duration': auto_lock_duration
         }
         with open(config_path, 'w') as f:
             json.dump(config, f, indent=4)
@@ -110,12 +110,12 @@ class ChannelManagement(commands.Cog):
                 # Edit the countdown message to say the channel has been locked and add the unlock button
                 await countdown_message.edit(content="The channel has been locked.", view=view)
 
-                # Schedule auto unlock after auto_unlock_duration
+                # Schedule auto unlock after auto_lock_duration
                 self.locked_channels[channel.id] = countdown_message
                 server_config = self.get_server_config(channel.guild.id)
-                self.bot.loop.create_task(self.auto_unlock_channel(channel, server_config['auto_unlock_duration']))
+                self.bot.loop.create_task(self.auto_lock_channel(channel, server_config['auto_lock_duration']))
 
-    async def auto_unlock_channel(self, channel, delay):
+    async def auto_lock_channel(self, channel, delay):
         await asyncio.sleep(delay)
         if channel.id in self.locked_channels:
             await unlock_channel(channel)
@@ -172,13 +172,13 @@ class ChannelManagement(commands.Cog):
     @commands.has_guild_permissions(manage_guild=True)
     @app_commands.describe(
         lock_delay="How many seconds before a channel locks.",
-        auto_unlock_duration="How many seconds before a channel auto-unlocks (3600 = one hour)"
+        auto_lock_duration="How many seconds before a channel auto-unlocks (3600 = one hour)"
     )
     
-    async def set_timers(self, ctx, lock_delay: int, auto_unlock_duration: int):
+    async def set_timers(self, ctx, lock_delay: int, auto_lock_duration: int):
         """Sets the timeout durations for this server. Timeout = how long before a channel locks, Auto unlock = how long a channel will stay locked for."""
-        self.save_server_config(ctx.guild.id, lock_delay, auto_unlock_duration)
-        await ctx.send(f"Timeout duration set to {lock_delay} seconds and auto unlock duration set to {auto_unlock_duration} seconds.")
+        self.save_server_config(ctx.guild.id, lock_delay, auto_lock_duration)
+        await ctx.send(f"Timeout duration set to {lock_delay} seconds and auto unlock duration set to {auto_lock_duration} seconds.")
         
     @set_timers.error
     async def set_timers_error(ctx, error):
