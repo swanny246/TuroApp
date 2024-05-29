@@ -324,7 +324,6 @@ class ChannelManagement(commands.Cog):
         except Exception as e:
             print(e)
 
-
     @set_shiny_lock_timer.error
     @set_rare_lock_timer.error
     @set_regional_lock_timer.error
@@ -335,6 +334,44 @@ class ChannelManagement(commands.Cog):
             await ctx.reply(':exclamation: You are not the master, you have no control over me!')
         else:
             await ctx.reply('Something went wrong. Vague, I know.')
+
+    @commands.hybrid_command(name="view_timers", description="View all your timers and lock settings.")
+    async def view_timers(self, ctx):
+        """Displays all the current timer and lock settings for the server."""
+        server_config = self.get_server_config(ctx.guild.id)
+
+        embed = discord.Embed(
+            title="Current timer and lock Settings",
+            color=discord.Color.blue()
+        )
+
+        embed.add_field(name="Lock Delay", value=f"{server_config.get('lock_delay', default_lock_delay)} seconds", inline=False)
+
+        shiny_lock = server_config.get('shiny_lock', {})
+        if shiny_lock.get('permanent_lock', False):
+            embed.add_field(name="Shiny Lock", value="Permanent", inline=False)
+        else:
+            embed.add_field(name="Shiny Lock Duration", value=f"{server_config.get('shiny_lock_duration', default_shiny_lock_duration)} seconds", inline=False)
+
+        rare_lock = server_config.get('rare_lock', {})
+        if rare_lock.get('permanent_lock', False):
+            embed.add_field(name="Rare Lock", value="Permanent", inline=False)
+        else:
+            embed.add_field(name="Rare Lock Duration", value=f"{server_config.get('rare_lock_duration', default_rare_lock_duration)} seconds", inline=False)
+
+        regional_lock = server_config.get('regional_lock', {})
+        if regional_lock.get('permanent_lock', False):
+            embed.add_field(name="Regional Lock", value="Permanent", inline=False)
+        else:
+            embed.add_field(name="Regional Lock Duration", value=f"{server_config.get('regional_lock_duration', default_regional_lock_duration)} seconds", inline=False)
+
+        collection_lock = server_config.get('collection_lock', {})
+        if collection_lock.get('permanent_lock', False):
+            embed.add_field(name="Collection Lock", value="Permanent", inline=False)
+        else:
+            embed.add_field(name="Collection Lock Duration", value=f"{server_config.get('collection_lock_duration', default_collection_lock_duration)} seconds", inline=False)
+
+        await ctx.send(embed=embed)
 
 async def setup(bot):
     await bot.add_cog(ChannelManagement(bot))
