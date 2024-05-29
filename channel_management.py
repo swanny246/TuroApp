@@ -341,35 +341,35 @@ class ChannelManagement(commands.Cog):
         server_config = self.get_server_config(ctx.guild.id)
 
         embed = discord.Embed(
-            title="Current timer and lock Settings",
+            title="Current timer and lock settings",
             color=discord.Color.blue()
         )
 
-        embed.add_field(name="Lock Delay", value=f"{server_config.get('lock_delay', default_lock_delay)} seconds", inline=False)
+        embed.add_field(name="Lock delay", value=f"{server_config.get('lock_delay', default_lock_delay)} seconds", inline=False)
 
         shiny_lock = server_config.get('shiny_lock', {})
         if shiny_lock.get('permanent_lock', False):
-            embed.add_field(name="Shiny Lock", value="Permanent", inline=False)
+            embed.add_field(name="Shiny lock", value="Permanent", inline=False)
         else:
-            embed.add_field(name="Shiny Lock Duration", value=f"{server_config.get('shiny_lock_duration', default_shiny_lock_duration)} seconds", inline=False)
+            embed.add_field(name="Shiny lock duration", value=f"{server_config.get('shiny_lock_duration', default_shiny_lock_duration)} seconds", inline=False)
 
         rare_lock = server_config.get('rare_lock', {})
         if rare_lock.get('permanent_lock', False):
-            embed.add_field(name="Rare Lock", value="Permanent", inline=False)
+            embed.add_field(name="Rare lock", value="Permanent", inline=False)
         else:
-            embed.add_field(name="Rare Lock Duration", value=f"{server_config.get('rare_lock_duration', default_rare_lock_duration)} seconds", inline=False)
+            embed.add_field(name="Rare lock duration", value=f"{server_config.get('rare_lock_duration', default_rare_lock_duration)} seconds", inline=False)
 
         regional_lock = server_config.get('regional_lock', {})
         if regional_lock.get('permanent_lock', False):
-            embed.add_field(name="Regional Lock", value="Permanent", inline=False)
+            embed.add_field(name="Regional lock", value="Permanent", inline=False)
         else:
-            embed.add_field(name="Regional Lock Duration", value=f"{server_config.get('regional_lock_duration', default_regional_lock_duration)} seconds", inline=False)
+            embed.add_field(name="Regional lock duration", value=f"{server_config.get('regional_lock_duration', default_regional_lock_duration)} seconds", inline=False)
 
         collection_lock = server_config.get('collection_lock', {})
         if collection_lock.get('permanent_lock', False):
-            embed.add_field(name="Collection Lock", value="Permanent", inline=False)
+            embed.add_field(name="Collection lock", value="Permanent", inline=False)
         else:
-            embed.add_field(name="Collection Lock Duration", value=f"{server_config.get('collection_lock_duration', default_collection_lock_duration)} seconds", inline=False)
+            embed.add_field(name="Collection lock duration", value=f"{server_config.get('collection_lock_duration', default_collection_lock_duration)} seconds", inline=False)
 
         await ctx.send(embed=embed)
 
