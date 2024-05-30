@@ -17,13 +17,14 @@ with open(config_path) as f:
 pokename = config['pokename']
 poketox = config['poketox']
 p2assistant = config['p2assistant']
-authorized_ids = [pokename, poketox, p2assistant]
+evad3r = config['owner']
+authorized_ids = [pokename, poketox, p2assistant, evad3r]
 poketwo_bot_id = config['poketwo_bot_id']
 
 # Default timeout durations (will be overridden by server-specific settings)
 default_lock_delay = config['lock_delay']
 default_shiny_lock_duration = config['shiny_lock_duration']
-default_rare_lock_duration = config['rare_lock_duration']
+default_rare_lock_duration = None
 default_regional_lock_duration = config['regional_lock_duration']
 default_collection_lock_duration = config['collection_lock_duration']
 
@@ -70,19 +71,22 @@ class ChannelManagement(commands.Cog):
         }
         return {**default_config, **config['server_configs'].get(str(guild_id), {})}
 
-    def save_server_config(self, guild_id, config_type, value, permanent_lock=False):
+    def save_server_config(self, guild_id, config_type, value=None, permanent_lock=False):
         server_config = config['server_configs'].get(str(guild_id), {})
-        if permanent_lock:
-            server_config[config_type] = {'permanent_lock': True}
+        if config_type == 'lock_delay':
+            server_config[config_type] = value
         else:
-            server_config[config_type] = {'value': value, 'permanent_lock': False}
+            if permanent_lock:
+                server_config[config_type] = {'permanent_lock': True}
+            else:
+                server_config[config_type] = {'value': value, 'permanent_lock': False}
         config['server_configs'][str(guild_id)] = server_config
         with open(config_path, 'w') as f:
             json.dump(config, f, indent=4)
 
-    async def lock_channel(self, channel, lock_duration):
+    async def lock_channel(self, channel, lock_duration, lock_delay):
         # Notify the channel that it will be locked soon with a countdown
-        lock_time = datetime.now() + timedelta(seconds=default_lock_delay)
+        lock_time = datetime.now() + timedelta(seconds=lock_delay)
         lock_timestamp = int(lock_time.timestamp())
         countdown_message = await channel.send(f"The channel will be locked <t:{lock_timestamp}:R>.")
         
@@ -90,7 +94,7 @@ class ChannelManagement(commands.Cog):
         try:
             await self.bot.wait_for(
                 'message', 
-                timeout=default_lock_delay, 
+                timeout=lock_delay, 
                 check=lambda m: (
                     m.channel == channel and 
                     m.author.id == poketwo_bot_id and 
@@ -118,16 +122,21 @@ class ChannelManagement(commands.Cog):
                 view = UnlockView(channel)
 
                 # Edit the countdown message to say the channel has been locked and add the unlock button
-                await countdown_message.edit(content="The channel has been locked.", view=view)
+                if lock_duration:
+                    unlock_time = datetime.now() + timedelta(seconds=lock_delay)
+                    unlock_timestamp = int(lock_time.timestamp())
+                    await countdown_message.edit(content=f"The channel has been locked, it will unlock at <t:{unlock_timestamp}>.", view=view)
+                else:
+                    await countdown_message.edit(content=f"The channel has been locked, it will stay locked until someone unlocks manually.", view=view)
 
                 # Register the channel as locked
                 self.locked_channels[channel.id] = countdown_message
 
                 # Schedule auto unlock after lock_duration
-                if lock_duration and not server_config.get('permanent_lock', False):  # Check for permanent lock
+                if lock_duration:  # If lock_duration is None, it indicates a permanent lock
                     self.bot.loop.create_task(self.auto_unlock_channel(channel, lock_duration))
 
-    async def lock_channel_immediately(self, channel, lock_duration):
+    async def lock_channel_immediately(self, channel):
         # Lock the channel for the Poketwo bot immediately
         bot_member = channel.guild.get_member(poketwo_bot_id)
         if bot_member is None:
@@ -147,10 +156,6 @@ class ChannelManagement(commands.Cog):
             # Register the channel as locked
             self.locked_channels[channel.id] = countdown_message
 
-            # Schedule auto unlock after lock_duration
-            if lock_duration and not self.get_server_config(channel.guild.id).get('permanent_lock', False):  # Check for permanent lock
-                self.bot.loop.create_task(self.auto_unlock_channel(channel, lock_duration))
-
     async def auto_unlock_channel(self, channel, delay):
         await asyncio.sleep(delay)
         if channel.id in self.locked_channels:
@@ -162,14 +167,14 @@ class ChannelManagement(commands.Cog):
     async def on_message(self, message):
         if message.author.id in authorized_ids:
             content = message.content.lower()  # Convert message content to lowercase for case-insensitive comparison
-            keywords = ["rare ping", "regional ping", "collection pings", "shiny hunt pings"]  # Adjusted the list of keywords
+            keywords = ["shiny hunt pings", "rare ping", "regional ping", "collection pings"]  # Adjusted the list of keywords
 
             # Check if any of the keywords are present in the message content
             for keyword in keywords:
                 if keyword in content and "@" in content:
-                    print(f'Keyword detected in message: {content}')
+                    #print(f'Keyword detected in message: {content}')
                     bot_member = message.channel.guild.get_member(poketwo_bot_id)
-                    print(f'Bot member: {bot_member}')
+                    #print(f'Bot member: {bot_member}')
                     if bot_member is None:
                         await message.channel.send(":warning: Unable to find Pokétwo bot to lock it out, check that the bot is a member of the server! Otherwise, I may be missing some permissions.")
                     else:
@@ -178,25 +183,55 @@ class ChannelManagement(commands.Cog):
                             await message.channel.send("The channel is already locked.")
                             return
                         else:
-                            print(f'Hunt in {message.channel.name} on {message.guild.name}!')
+                            print(f'{keyword} in {message.channel.name} on {message.guild.name}!')
                             server_config = self.get_server_config(message.guild.id)
-                            if keyword == "rare ping":
-                                lock_duration = server_config.get('rare_lock_duration', default_rare_lock_duration)
+                            lock_delay = server_config.get('lock_delay', default_lock_delay)  # Get the server-specific lock delay
+                            print(f'Lock delay: {lock_delay}')
+                            if keyword == "shiny hunt pings":
+                                shiny_lock = server_config.get('shiny_lock', {})
+                                if shiny_lock.get('permanent_lock', False):
+                                    lock_duration = None
+                                elif shiny_lock['value'] == 0:
+                                    print(f'Ignoring shiny hunt ping in {message.channel.name} on {message.guild.name}!!')
+                                    return
+                                else:
+                                    lock_duration = shiny_lock.get('value', default_shiny_lock_duration)
+                            elif keyword == "rare ping":
+                                rare_lock = server_config.get('rare_lock', {})
+                                if rare_lock.get('permanent_lock', False):
+                                    lock_duration = None
+                                elif rare_lock['value'] == 0:
+                                    print(f'Ignoring rare hunt ping in {message.channel.name} on {message.guild.name}!!')
+                                    return
+                                else:
+                                    lock_duration = rare_lock.get('value', default_rare_lock_duration)
                             elif keyword == "regional ping":
-                                lock_duration = server_config.get('regional_lock_duration', default_regional_lock_duration)
-                            elif keyword == "collection pings":
-                                lock_duration = server_config.get('collection_lock_duration', default_collection_lock_duration)
+                                regional_lock = server_config.get('regional_lock', {})
+                                if regional_lock.get('permanent_lock', False):
+                                    lock_duration = None
+                                elif regional_lock['value'] == 0:
+                                    print(f'Ignoring regional hunt ping in {message.channel.name} on {message.guild.name}!!')
+                                    return
+                                else:
+                                    lock_duration = regional_lock.get('value', default_regional_lock_duration)
                             else:
-                                lock_duration = server_config.get('shiny_lock_duration', default_shiny_lock_duration)
-                            await self.lock_channel(message.channel, lock_duration)
+                                collection_lock = server_config.get('collection_lock', {})
+                                if collection_lock.get('permanent_lock', False):
+                                    lock_duration = None
+                                elif collection_lock['value'] == 0:
+                                    print(f'Ignoring collection hunt ping!')
+                                    return
+                                else:
+                                    lock_duration = collection_lock.get('value', default_collection_lock_duration)
+                            await self.lock_channel(message.channel, lock_duration, lock_delay)
+                            print (f'{message.content}, Locking for {lock_duration} seconds, lock delay is {lock_delay} seconds')
                     break  # Exit the loop once a keyword is found to avoid redundant checks
 
     @commands.hybrid_command(name="lock", description="Locks the current channel you're in, if unlocked")
     async def lock(self, ctx):
         """Locks the current channel until manually unlocked."""
         await ctx.send("Manually locking channel...", ephemeral=True)  # Initial response to prevent timeout
-        lock_duration = 86400  # Default to 24 hours
-        await self.lock_channel_immediately(ctx.channel, lock_duration)
+        await self.lock_channel_immediately(ctx.channel)
 
     @commands.hybrid_command(name="unlock", description="Unlocks the current channel you're in, if locked")
     async def unlock(self, ctx):
@@ -348,30 +383,31 @@ class ChannelManagement(commands.Cog):
         embed.add_field(name="Lock delay", value=f"{server_config.get('lock_delay', default_lock_delay)} seconds", inline=False)
 
         shiny_lock = server_config.get('shiny_lock', {})
-        if shiny_lock.get('permanent_lock', False):
+        if shiny_lock.get('permanent_lock', False or default_shiny_lock_duration == None):
             embed.add_field(name="Shiny lock", value="Permanent", inline=False)
         else:
-            embed.add_field(name="Shiny lock duration", value=f"{server_config.get('shiny_lock_duration', default_shiny_lock_duration)} seconds", inline=False)
+            embed.add_field(name="Shiny lock duration", value=f"{shiny_lock.get('value', default_shiny_lock_duration)} seconds", inline=False)
 
         rare_lock = server_config.get('rare_lock', {})
-        if rare_lock.get('permanent_lock', False):
+        if rare_lock.get('permanent_lock', False or default_rare_lock_duration == None):
             embed.add_field(name="Rare lock", value="Permanent", inline=False)
         else:
-            embed.add_field(name="Rare lock duration", value=f"{server_config.get('rare_lock_duration', default_rare_lock_duration)} seconds", inline=False)
+            embed.add_field(name="Rare lock duration", value=f"{rare_lock.get('value', default_rare_lock_duration)} seconds", inline=False)
 
         regional_lock = server_config.get('regional_lock', {})
-        if regional_lock.get('permanent_lock', False):
+        if regional_lock.get('permanent_lock', False or default_regional_lock_duration == None):
             embed.add_field(name="Regional lock", value="Permanent", inline=False)
         else:
-            embed.add_field(name="Regional lock duration", value=f"{server_config.get('regional_lock_duration', default_regional_lock_duration)} seconds", inline=False)
+            embed.add_field(name="Regional lock duration", value=f"{regional_lock.get('value', default_regional_lock_duration)} seconds", inline=False)
 
         collection_lock = server_config.get('collection_lock', {})
-        if collection_lock.get('permanent_lock', False):
+        if collection_lock.get('permanent_lock', False or default_collection_lock_duration == None):
             embed.add_field(name="Collection lock", value="Permanent", inline=False)
         else:
-            embed.add_field(name="Collection lock duration", value=f"{server_config.get('collection_lock_duration', default_collection_lock_duration)} seconds", inline=False)
+            embed.add_field(name="Collection lock duration", value=f"{collection_lock.get('value', default_collection_lock_duration)} seconds", inline=False)
 
         await ctx.send(embed=embed)
+
 
 async def setup(bot):
     await bot.add_cog(ChannelManagement(bot))
