@@ -29,14 +29,19 @@ default_regional_lock_duration = config['regional_lock_duration']
 default_collection_lock_duration = config['collection_lock_duration']
 
 class UnlockView(View):
-    def __init__(self, channel):
+    def __init__(self, channel, channel_management):
         super().__init__(timeout=None)
         self.channel = channel
-
+        self.channel_management = channel_management  # Store the instance of ChannelManagement
+        
     @discord.ui.button(label="Unlock", style=discord.ButtonStyle.danger, emoji="🔐")
     async def unlock_button(self, interaction: discord.Interaction, button: Button):
         await unlock_channel(self.channel)
         await interaction.response.send_message("The channel has been unlocked.", ephemeral=True)
+        
+        # Remove the channel ID from locked_channels using the instance of ChannelManagement
+        if self.channel.id in self.channel_management.locked_channels:
+            del self.channel_management.locked_channels[self.channel.id]
         
         # Update the button to show it has been used
         button.label = "Unlocked"
@@ -119,12 +124,12 @@ class ChannelManagement(commands.Cog):
                 await channel.set_permissions(bot_member, overwrite=overwrite)
 
                 # Create the unlock button view
-                view = UnlockView(channel)
+                view = UnlockView(channel, self)
 
                 # Edit the countdown message to say the channel has been locked and add the unlock button
                 if lock_duration:
-                    unlock_time = datetime.now() + timedelta(seconds=lock_delay)
-                    unlock_timestamp = int(lock_time.timestamp())
+                    unlock_time = datetime.now() + timedelta(seconds=lock_duration)
+                    unlock_timestamp = int(unlock_time.timestamp())
                     await countdown_message.edit(content=f"The channel has been locked, it will unlock at <t:{unlock_timestamp}>.", view=view)
                 else:
                     await countdown_message.edit(content=f"The channel has been locked, it will stay locked until someone unlocks manually.", view=view)
@@ -148,7 +153,7 @@ class ChannelManagement(commands.Cog):
             await channel.set_permissions(bot_member, overwrite=overwrite)
 
             # Create the unlock button view
-            view = UnlockView(channel)
+            view = UnlockView(channel, self)
 
             # Notify the channel that it has been locked and add the unlock button
             countdown_message = await channel.send("The channel has been locked.", view=view)
@@ -162,6 +167,9 @@ class ChannelManagement(commands.Cog):
             await unlock_channel(channel)
             await channel.send("The channel has been automatically unlocked due to inactivity.")
             del self.locked_channels[channel.id]
+        else:
+            print("Channel was manually unlocked, skipping automatic unlocking.")
+
 
     @commands.Cog.listener()
     async def on_message(self, message):
