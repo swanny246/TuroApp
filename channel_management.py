@@ -37,7 +37,7 @@ class UnlockView(View):
     @discord.ui.button(label="Unlock", style=discord.ButtonStyle.danger, emoji="🔐")
     async def unlock_button(self, interaction: discord.Interaction, button: Button):
         await unlock_channel(self.channel)
-        await interaction.response.send_message("The channel has been unlocked.", ephemeral=True)
+        await interaction.response.send_message(f"The channel has been unlocked by {interaction.user.mention}.")
         
         # Remove the channel ID from locked_channels using the instance of ChannelManagement
         if self.channel.id in self.channel_management.locked_channels:
@@ -59,6 +59,7 @@ async def unlock_channel(channel):
         overwrite = channel.overwrites_for(bot_member)
         overwrite.send_messages = True
         overwrite.read_messages = True
+        overwrite.read_message_history = True
         await channel.set_permissions(bot_member, overwrite=overwrite)
 
 class ChannelManagement(commands.Cog):
@@ -108,11 +109,11 @@ class ChannelManagement(commands.Cog):
                 )
             )
             await countdown_message.edit(content="Interrupted by a catch, not locking the channel!")
-            print("Interrupted by a message containing 'Congratulations' and 'You caught a Level', not locking the channel!")
+            print(f"{channel.guild.name} - {channel.name} - Interrupted by a message containing 'Congratulations' and 'You caught a Level', not locking the channel!")
         except asyncio.TimeoutError:
             # Lock the channel for the Poketwo bot
             bot_member = channel.guild.get_member(poketwo_bot_id)
-            print(f'Bot member: {bot_member}')
+            #print(f'Bot member: {bot_member}')
             
             if bot_member is None:
                 await channel.send(":warning: Unable to find Pokétwo bot to lock it out, check that the bot is a member of the server! Otherwise, I may be missing some permissions.")
@@ -120,7 +121,8 @@ class ChannelManagement(commands.Cog):
                 overwrite = channel.overwrites_for(bot_member)
                 overwrite.send_messages = False
                 overwrite.read_messages = False
-                print(f'Permissions overwrite: {overwrite}')
+                overwrite.read_message_history = False
+                #print(f'Permissions overwrite: {overwrite}')
                 await channel.set_permissions(bot_member, overwrite=overwrite)
 
                 # Create the unlock button view
@@ -150,6 +152,7 @@ class ChannelManagement(commands.Cog):
             overwrite = channel.overwrites_for(bot_member)
             overwrite.send_messages = False
             overwrite.read_messages = False
+            overwrite.read_message_history = False
             await channel.set_permissions(bot_member, overwrite=overwrite)
 
             # Create the unlock button view
@@ -165,10 +168,11 @@ class ChannelManagement(commands.Cog):
         await asyncio.sleep(delay)
         if channel.id in self.locked_channels:
             await unlock_channel(channel)
-            await channel.send("The channel has been automatically unlocked due to inactivity.")
+            await channel.send("The channel has been automatically unlocked due to inactivity. The spawn is now free-for-all to catch.")
+            print(f"{channel.guild.name} - {channel.name} - Channel was unlocked due to inactivity.")
             del self.locked_channels[channel.id]
         else:
-            print("Channel was manually unlocked, skipping automatic unlocking.")
+            print(f"{channel.guild.name} - {channel.name} - Channel was manually unlocked, skipping automatic unlocking.")
 
 
     @commands.Cog.listener()
@@ -187,52 +191,61 @@ class ChannelManagement(commands.Cog):
                         await message.channel.send(":warning: Unable to find Pokétwo bot to lock it out, check that the bot is a member of the server! Otherwise, I may be missing some permissions.")
                     else:
                         overwrite = message.channel.overwrites_for(bot_member)
-                        if overwrite.send_messages is False and overwrite.read_messages is False:
+                        if overwrite.send_messages is False and overwrite.read_messages is False and overwrite.read_message_history is False:
+                            print(f'{message.guild.name} - {message.channel.name} - Channel already locked')
                             await message.channel.send("The channel is already locked.")
                             return
                         else:
-                            print(f'{keyword} in {message.channel.name} on {message.guild.name}!')
+                            print(f'{message.guild.name} - {message.channel.name} - "{keyword}" found')
                             server_config = self.get_server_config(message.guild.id)
                             lock_delay = server_config.get('lock_delay', default_lock_delay)  # Get the server-specific lock delay
-                            print(f'Lock delay: {lock_delay}')
+                            print(f'{message.guild.name} - {message.channel.name} - Lock delay: {lock_delay}')
                             if keyword == "shiny hunt pings":
                                 shiny_lock = server_config.get('shiny_lock', {})
                                 if shiny_lock.get('permanent_lock', False):
+                                    print(f'{message.guild.name} - {message.channel.name} - shiny locking until manually unlocked')
                                     lock_duration = None
                                 elif shiny_lock['value'] == 0:
-                                    print(f'Ignoring shiny hunt ping in {message.channel.name} on {message.guild.name}!!')
+                                    print(f'Ignoring shiny hunt ping in {message.channel.name} on {message.guild.name}')
                                     return
                                 else:
                                     lock_duration = shiny_lock.get('value', default_shiny_lock_duration)
+                                    print(f'{message.guild.name} - {message.channel.name} - shiny locking for default duration {default_shiny_lock_duration} seconds')
                             elif keyword == "rare ping":
                                 rare_lock = server_config.get('rare_lock', {})
                                 if rare_lock.get('permanent_lock', False):
+                                    print(f'{message.guild.name} - {message.channel.name} - rare locking until manually unlocked')
                                     lock_duration = None
                                 elif rare_lock['value'] == 0:
-                                    print(f'Ignoring rare hunt ping in {message.channel.name} on {message.guild.name}!!')
+                                    print(f'Ignoring rare hunt ping in {message.channel.name} on {message.guild.name}!')
                                     return
                                 else:
                                     lock_duration = rare_lock.get('value', default_rare_lock_duration)
+                                    print(f'{message.guild.name} - {message.channel.name} - rare locking for default duration {default_rare_lock_duration} seconds')
                             elif keyword == "regional ping":
                                 regional_lock = server_config.get('regional_lock', {})
                                 if regional_lock.get('permanent_lock', False):
                                     lock_duration = None
+                                    print(f'{message.guild.name} - {message.channel.name} - regional locking until manually unlocked')
                                 elif regional_lock['value'] == 0:
-                                    print(f'Ignoring regional hunt ping in {message.channel.name} on {message.guild.name}!!')
+                                    print(f'Ignoring regional hunt ping in {message.channel.name} on {message.guild.name}!')
                                     return
                                 else:
                                     lock_duration = regional_lock.get('value', default_regional_lock_duration)
+                                    print(f'{message.guild.name} - {message.channel.name} - regional locking for default duration {default_regional_lock_duration} seconds')
                             else:
                                 collection_lock = server_config.get('collection_lock', {})
                                 if collection_lock.get('permanent_lock', False):
                                     lock_duration = None
+                                    print(f'{message.guild.name} - {message.channel.name} - collection locking until manually unlocked')
                                 elif collection_lock['value'] == 0:
-                                    print(f'Ignoring collection hunt ping!')
+                                    print(f'Ignoring collection hunt ping in {message.channel.name} on {message.guild.name}!!')
                                     return
                                 else:
                                     lock_duration = collection_lock.get('value', default_collection_lock_duration)
+                                    print(f'{message.guild.name} - {message.channel.name} - rare locking for default duration {default_collection_lock_duration} seconds')
                             await self.lock_channel(message.channel, lock_duration, lock_delay)
-                            print (f'{message.content}, Locking for {lock_duration} seconds, lock delay is {lock_delay} seconds')
+                            print (f'{message.guild.name} - {message.channel.name} - keyword checks complete, outcome is lock for {lock_duration} seconds, lock delay is {lock_delay} seconds')
                     break  # Exit the loop once a keyword is found to avoid redundant checks
 
     @commands.hybrid_command(name="lock", description="Locks the current channel you're in, if unlocked")
@@ -240,6 +253,7 @@ class ChannelManagement(commands.Cog):
         """Locks the current channel until manually unlocked."""
         await ctx.send("Manually locking channel...", ephemeral=True)  # Initial response to prevent timeout
         await self.lock_channel_immediately(ctx.channel)
+        print(f'{message.guild.name} - {message.channel.name} - channel manually locked')
 
     @commands.hybrid_command(name="unlock", description="Unlocks the current channel you're in, if locked")
     async def unlock(self, ctx):
@@ -249,7 +263,7 @@ class ChannelManagement(commands.Cog):
             await ctx.channel.send(":warning: Unable to find Pokétwo bot to let it back in, check that the bot is a member of the server! Otherwise, I may be missing some permissions.")
         else:
             overwrite = ctx.channel.overwrites_for(bot_member)
-            if overwrite.send_messages is not False and overwrite.read_messages is not False:
+            if overwrite.send_messages is not False and overwrite.read_messages is not False and overwrite.read_message_history is not False:
                 await ctx.send("This channel is already unlocked.")
             else:
                 await ctx.send("The channel has been unlocked.")
@@ -416,6 +430,34 @@ class ChannelManagement(commands.Cog):
 
         await ctx.send(embed=embed)
 
+# Creating a sync_channels slash command
+class SyncChannels(commands.Cog):
+    def __init__(self, bot):
+        self.bot = bot
 
+    @app_commands.command(name="sync_channels", description="Sync permissions of all channels in a category with the category.")
+    @commands.has_guild_permissions(manage_guild=True)
+    @app_commands.describe(category="The category whose channels' permissions you want to sync.")
+    async def sync_channels(self, interaction: discord.Interaction, category: discord.CategoryChannel):
+        # Check if the user has the necessary permissions to manage channels
+        if not interaction.user.guild_permissions.manage_channels:
+            await interaction.response.send_message("You do not have permission to manage channels.", ephemeral=True)
+            return
+
+        # Sync permissions for all channels in the category
+        failed_channels = []
+        for channel in category.channels:
+            try:
+                await channel.edit(sync_permissions=True)
+            except Exception as e:
+                failed_channels.append(channel.name)
+                print(f"Failed to sync {channel.name}: {e}")
+
+        if failed_channels:
+            await interaction.response.send_message(f"Failed to sync the following channels: {', '.join(failed_channels)}")
+        else:
+            await interaction.response.send_message(f"Successfully synced all channels in the category {category.name}.")
+            
 async def setup(bot):
     await bot.add_cog(ChannelManagement(bot))
+    #await bot.add_cog(SyncChannels(bot))
