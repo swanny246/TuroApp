@@ -17,7 +17,7 @@ with open(config_path) as f:
 pokename = config['pokename']
 poketox = config['poketox']
 p2assistant = config['p2assistant']
-authorized_ids = [pokename, poketox, p2assistant, evad3r]
+authorized_ids = [pokename, poketox, p2assistant]
 poketwo_bot_id = config['poketwo_bot_id']
 
 # Default timeout durations (will be overridden by server-specific settings)
