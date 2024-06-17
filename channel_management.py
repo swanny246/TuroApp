@@ -1,6 +1,4 @@
-import discord
-import json
-import os
+import discord, json, os, time
 from discord.ext import commands
 from discord.ui import Button, View
 from discord import app_commands
@@ -65,6 +63,7 @@ class ChannelManagement(commands.Cog):
     def __init__(self, bot):
         self.bot = bot
         self.locked_channels = {}
+        self.last_actioned_message = {}  # Dictionary to track last message timestamp for each channel
 
     def get_server_config(self, guild_id):
         default_config = {
@@ -173,8 +172,6 @@ class ChannelManagement(commands.Cog):
                 del self.locked_channels[channel.id]
             else:
                 print(f"{channel.guild.name} - {channel.name} - Channel unlock was scheduled, but another lock action occurred.")
-        else:
-            print(f"{channel.guild.name} - {channel.name} - Channel was manually unlocked, skipping automatic unlocking.")
 
     @commands.Cog.listener()
     async def on_message(self, message):
@@ -198,6 +195,21 @@ class ChannelManagement(commands.Cog):
                             server_config = self.get_server_config(message.guild.id)
                             lock_delay = server_config.get('lock_delay', default_lock_delay)
                             print(f'{message.guild.name} - {message.channel.name} - Lock delay: {lock_delay}')
+                            
+                            # Check if a message from an authorized bot was actioned in the last minute in the same channel
+                            last_actioned = self.last_actioned_message.get(message.channel.id)
+                            #print(f'Last actioned: {last_actioned}')
+                            current_time = time.time()
+                            #print(f'Current time: {current_time}')
+
+                            if last_actioned and (current_time - last_actioned) < 60:
+                                print(f"{message.guild.name} - {message.channel.name} - Ignoring subsequent ping due to cooldown")
+                                return
+
+                            # Update the last actioned message timestamp before proceeding with the lock
+                            self.last_actioned_message[message.channel.id] = current_time
+                            print(f'Last actioned message: {self.last_actioned_message[message.channel.id]}')
+
                             if keyword == "shiny hunt pings":
                                 shiny_lock = server_config.get('shiny_lock', {})
                                 if shiny_lock.get('permanent_lock', False):
@@ -243,8 +255,9 @@ class ChannelManagement(commands.Cog):
                                     lock_duration = collection_lock.get('value', default_collection_lock_duration)
                                     print(f'{message.guild.name} - {message.channel.name} - rare locking for default duration {default_collection_lock_duration} seconds')
                             await self.lock_channel(message.channel, lock_duration, lock_delay)
-                            print (f'{message.guild.name} - {message.channel.name} - keyword checks complete, outcome is lock for {lock_duration} seconds, lock delay is {lock_delay} seconds')
+                            print(f'{message.guild.name} - {message.channel.name} - keyword checks complete, outcome is lock for {lock_duration} seconds, lock delay is {lock_delay} seconds')
                     break  # Exit the loop once a keyword is found to avoid redundant checks
+
 
     @commands.hybrid_command(name="lock", description="Locks the current channel you're in, if unlocked")
     async def lock(self, ctx):
@@ -263,7 +276,6 @@ class ChannelManagement(commands.Cog):
             overwrite.read_messages = True
             overwrite.read_message_history = True
             await channel.set_permissions(bot_member, overwrite=overwrite)
-
         if channel.id in self.locked_channels:
             del self.locked_channels[channel.id]
             
