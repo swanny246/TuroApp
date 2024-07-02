@@ -16,7 +16,7 @@ pokename = config['pokename']
 poketox = config['poketox']
 p2assistant = config['p2assistant']
 tester = config['owner']
-authorized_ids = [pokename, poketox, p2assistant, tester]
+authorized_ids = [pokename, poketox, p2assistant]
 poketwo_bot_id = config['poketwo_bot_id']
 
 # Default timeout durations (will be overridden by server-specific settings)

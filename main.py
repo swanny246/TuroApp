@@ -21,6 +21,7 @@ bot = commands.Bot(command_prefix="!", intents=intents)
 @bot.event
 async def on_ready():
     print(f'Logged in as {bot.user}')
+    await bot.change_presence(activity=discord.CustomActivity(name='Turov1.2.3' ,emoji='🖥️'))
 
 @bot.hybrid_command()
 @commands.has_guild_permissions(manage_guild=True)
