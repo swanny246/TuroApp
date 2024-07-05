@@ -212,8 +212,21 @@ class ChannelManagement(commands.Cog):
         if message.author.id in authorized_ids:
             content = message.content.lower()
             lines = content.splitlines()  # Split the message content into lines
-            keywords = ["shiny hunt pings", "collection pings", "rare ping", "regional ping"]
+            keywords = ["shiny hunt pings", "collection pings", "rare ping", "regional ping"] # in order of priority of pings
+            server_config = self.get_server_config(message.guild.id)
+            lock_delay = server_config.get('lock_delay', default_lock_delay)
+            print(f'{message.guild.name} - {message.channel.name} - Lock delay: {lock_delay}')
             has_permissions = False
+            # Check if a message from an authorized bot was actioned in the last minute in the same channel
+            last_actioned = self.last_actioned_message.get(message.channel.id)
+            current_time = time.time()
+
+            if last_actioned and (current_time - last_actioned) < 60:
+                print(f"{message.guild.name} - {message.channel.name} - Ignoring subsequent ping due to cooldown")
+                return
+
+            # Update the last actioned message timestamp before proceeding with the lock
+            self.last_actioned_message[message.channel.id] = current_time
             for line in lines:
                 for keyword in keywords:
                     if keyword in line and "@" in line:
@@ -221,8 +234,43 @@ class ChannelManagement(commands.Cog):
                         if bot_member is None:
                             await message.channel.send(":warning: Unable to find Pokétwo bot to lock it out, check that the bot is a member of the server! Otherwise, I may be missing some permissions.")
                             return
+                        ## Check if it's a rare or regional ping first
+                        if keyword == "rare ping":
+                            rare_lock = server_config.get('rare_lock', {})
+                            if rare_lock.get('permanent_lock', False):
+                                print(f'{message.guild.name} - {message.channel.name} - rare locking until manually unlocked')
+                                lock_duration = None
+                                await self.lock_channel(message.channel, lock_duration, lock_delay)
+                                print(f'{message.guild.name} - {message.channel.name} - keyword checks complete, outcome is lock for {lock_duration} seconds, lock delay is {lock_delay} seconds')
+                                return
+                            elif rare_lock['value'] == 0:
+                                print(f'Ignoring rare hunt ping in {message.channel.name} on {message.guild.name}!')
+                                return
+                            else:
+                                lock_duration = rare_lock.get('value', default_rare_lock_duration)
+                                print(f'{message.guild.name} - {message.channel.name} - rare locking for default duration {default_rare_lock_duration} seconds')
+                                await self.lock_channel(message.channel, lock_duration, lock_delay)
+                                print(f'{message.guild.name} - {message.channel.name} - keyword checks complete, outcome is lock for {lock_duration} seconds, lock delay is {lock_delay} seconds')
+                                return
+                        elif keyword == "regional ping":
+                            regional_lock = server_config.get('regional_lock', {})
+                            if regional_lock.get('permanent_lock', False):
+                                lock_duration = None
+                                print(f'{message.guild.name} - {message.channel.name} - regional locking until manually unlocked')
+                                await self.lock_channel(message.channel, lock_duration, lock_delay)
+                                print(f'{message.guild.name} - {message.channel.name} - keyword checks complete, outcome is lock for {lock_duration} seconds, lock delay is {lock_delay} seconds')
+                                return
+                            elif regional_lock['value'] == 0:
+                                print(f'Ignoring regional hunt ping in {message.channel.name} on {message.guild.name}!')
+                                return
+                            else:
+                                lock_duration = regional_lock.get('value', default_regional_lock_duration)
+                                print(f'{message.guild.name} - {message.channel.name} - regional locking for default duration {default_regional_lock_duration} seconds')
+                                await self.lock_channel(message.channel, lock_duration, lock_delay)
+                                print(f'{message.guild.name} - {message.channel.name} - keyword checks complete, outcome is lock for {lock_duration} seconds, lock delay is {lock_delay} seconds')
+                                return
 
-                        # Extract mentions from the current line
+                        # If it's not a rare or regional ping, ok, extract mentions from the current line
                         tagged_user_ids = re.findall(r'<@!?(\d+)>', line)
                         tagged_users = [message.guild.get_member(int(user_id)) for user_id in tagged_user_ids if message.guild.get_member(int(user_id))]
 
@@ -240,21 +288,6 @@ class ChannelManagement(commands.Cog):
                                         return
                                     else:
                                         print(f'{message.guild.name} - {message.channel.name} - "{keyword}" found')
-                                        server_config = self.get_server_config(message.guild.id)
-                                        lock_delay = server_config.get('lock_delay', default_lock_delay)
-                                        print(f'{message.guild.name} - {message.channel.name} - Lock delay: {lock_delay}')
-                                        
-                                        # Check if a message from an authorized bot was actioned in the last minute in the same channel
-                                        last_actioned = self.last_actioned_message.get(message.channel.id)
-                                        current_time = time.time()
-
-                                        if last_actioned and (current_time - last_actioned) < 60:
-                                            print(f"{message.guild.name} - {message.channel.name} - Ignoring subsequent ping due to cooldown")
-                                            return
-
-                                        # Update the last actioned message timestamp before proceeding with the lock
-                                        self.last_actioned_message[message.channel.id] = current_time
-
                                         if keyword == "shiny hunt pings":
                                             shiny_lock = server_config.get('shiny_lock', {})
                                             if shiny_lock.get('permanent_lock', False):
@@ -266,28 +299,6 @@ class ChannelManagement(commands.Cog):
                                             else:
                                                 lock_duration = shiny_lock.get('value', default_shiny_lock_duration)
                                                 print(f'{message.guild.name} - {message.channel.name} - shiny locking for default duration {default_shiny_lock_duration} seconds')
-                                        elif keyword == "rare ping":
-                                            rare_lock = server_config.get('rare_lock', {})
-                                            if rare_lock.get('permanent_lock', False):
-                                                print(f'{message.guild.name} - {message.channel.name} - rare locking until manually unlocked')
-                                                lock_duration = None
-                                            elif rare_lock['value'] == 0:
-                                                print(f'Ignoring rare hunt ping in {message.channel.name} on {message.guild.name}!')
-                                                return
-                                            else:
-                                                lock_duration = rare_lock.get('value', default_rare_lock_duration)
-                                                print(f'{message.guild.name} - {message.channel.name} - rare locking for default duration {default_rare_lock_duration} seconds')
-                                        elif keyword == "regional ping":
-                                            regional_lock = server_config.get('regional_lock', {})
-                                            if regional_lock.get('permanent_lock', False):
-                                                lock_duration = None
-                                                print(f'{message.guild.name} - {message.channel.name} - regional locking until manually unlocked')
-                                            elif regional_lock['value'] == 0:
-                                                print(f'Ignoring regional hunt ping in {message.channel.name} on {message.guild.name}!')
-                                                return
-                                            else:
-                                                lock_duration = regional_lock.get('value', default_regional_lock_duration)
-                                                print(f'{message.guild.name} - {message.channel.name} - regional locking for default duration {default_regional_lock_duration} seconds')
                                         else:
                                             collection_lock = server_config.get('collection_lock', {})
                                             if collection_lock.get('permanent_lock', False):
@@ -298,7 +309,7 @@ class ChannelManagement(commands.Cog):
                                                 return
                                             else:
                                                 lock_duration = collection_lock.get('value', default_collection_lock_duration)
-                                                print(f'{message.guild.name} - {message.channel.name} - rare locking for default duration {default_collection_lock_duration} seconds')
+                                                print(f'{message.guild.name} - {message.channel.name} - collection locking for default duration {default_collection_lock_duration} seconds')
                                         
                                         await self.lock_channel(message.channel, lock_duration, lock_delay)
                                         print(f'{message.guild.name} - {message.channel.name} - keyword checks complete, outcome is lock for {lock_duration} seconds, lock delay is {lock_delay} seconds')
