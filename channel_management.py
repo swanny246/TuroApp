@@ -16,7 +16,7 @@ pokename = config['pokename']
 poketox = config['poketox']
 p2assistant = config['p2assistant']
 tester = config['owner']
-authorized_ids = [pokename, poketox, p2assistant, tester]
+authorized_ids = [pokename, poketox, p2assistant]
 poketwo_bot_id = config['poketwo_bot_id']
 
 # Default timeout durations (will be overridden by server-specific settings)
@@ -215,13 +215,11 @@ class ChannelManagement(commands.Cog):
             keywords = ["shiny hunt pings", "collection pings", "rare ping", "regional ping"] # in order of priority of pings
             server_config = self.get_server_config(message.guild.id)
             lock_delay = server_config.get('lock_delay', default_lock_delay)
-            print(f'{message.guild.name} - {message.channel.name} - Lock delay: {lock_delay}')
+            #print(f'{message.guild.name} - {message.channel.name} - Lock delay: {lock_delay}')
             has_permissions = False
 
             for line in lines:
-                print(f"for {line}")
                 for keyword in keywords:
-                    print(f"for {keyword}")
                     if keyword in line and "@" in line:
                         # Check if a message from an authorized bot was actioned in the last minute in the same channel
                         last_actioned = self.last_actioned_message.get(message.channel.id)
@@ -291,26 +289,21 @@ class ChannelManagement(commands.Cog):
                                         print(f'{message.guild.name} - {message.channel.name} - "{keyword}" found')
                                         if keyword == "shiny hunt pings":
                                             shiny_lock = server_config.get('shiny_lock', {'duration': default_shiny_lock_duration, 'permanent_lock': False})
-                                            print(f'Default shiny lock: {default_shiny_lock_duration}')
-                                            print(f'Shiny lock: {shiny_lock}')
                                             
                                             # Check if the shiny lock is permanent
                                             if shiny_lock.get('permanent_lock'):
-                                                print('going into if')
                                                 print(f'{message.guild.name} - {message.channel.name} - shiny locking until manually unlocked')
                                                 lock_duration = None
                                             
                                             # Check if the shiny lock value is 0
                                             elif shiny_lock.get('value') == 0:
-                                                print('going into elif')
                                                 print(f'Ignoring shiny hunt ping in {message.channel.name} on {message.guild.name}')
                                                 return
                                             
                                             # Otherwise, set the lock duration
                                             else:
                                                 lock_duration = shiny_lock.get('value', default_shiny_lock_duration)
-                                                print(f'Lock duration: {lock_duration}')
-                                                print(f'{message.guild.name} - {message.channel.name} - shiny locking for default duration {default_shiny_lock_duration} seconds')
+                                                print(f'{message.guild.name} - {message.channel.name} - shiny locking for {lock_duration} seconds')
 
                                         else:
                                             collection_lock = server_config.get('collection_lock', {'duration': default_collection_lock_duration, 'permanent_lock': False})
@@ -322,7 +315,7 @@ class ChannelManagement(commands.Cog):
                                                 return
                                             else:
                                                 lock_duration = collection_lock.get('value', default_collection_lock_duration)
-                                                print(f'{message.guild.name} - {message.channel.name} - collection locking for default duration {default_collection_lock_duration} seconds')
+                                                print(f'{message.guild.name} - {message.channel.name} - collection locking for {lock_duration} seconds')
                                         
                                         await self.lock_channel(message.channel, lock_duration, lock_delay)
                                         print(f'{message.guild.name} - {message.channel.name} - keyword checks complete, outcome is lock for {lock_duration} seconds, lock delay is {lock_delay} seconds')
