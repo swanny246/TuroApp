@@ -215,28 +215,27 @@ class ChannelManagement(commands.Cog):
             keywords = ["shiny hunt pings", "collection pings", "rare ping", "regional ping"] # in order of priority of pings
             server_config = self.get_server_config(message.guild.id)
             lock_delay = server_config.get('lock_delay', default_lock_delay)
-            print(f'{message.guild.name} - {message.channel.name} - Lock delay: {lock_delay}')
+            #print(f'{message.guild.name} - {message.channel.name} - Lock delay: {lock_delay}')
             has_permissions = False
-            # Check if a message from an authorized bot was actioned in the last minute in the same channel
-            last_actioned = self.last_actioned_message.get(message.channel.id)
-            current_time = time.time()
 
-            if last_actioned and (current_time - last_actioned) < 60:
-                print(f"{message.guild.name} - {message.channel.name} - Ignoring subsequent ping due to cooldown")
-                return
-
-            # Update the last actioned message timestamp before proceeding with the lock
-            self.last_actioned_message[message.channel.id] = current_time
             for line in lines:
                 for keyword in keywords:
                     if keyword in line and "@" in line:
+                        # Check if a message from an authorized bot was actioned in the last minute in the same channel
+                        last_actioned = self.last_actioned_message.get(message.channel.id)
+                        current_time = time.time()
+                        self.last_actioned_message[message.channel.id] = current_time
+                        
+                        if last_actioned and (current_time - last_actioned) < 60:
+                            print(f"{message.guild.name} - {message.channel.name} - Ignoring subsequent ping due to cooldown")
+                            return
                         bot_member = message.channel.guild.get_member(poketwo_bot_id)
                         if bot_member is None:
                             await message.channel.send(":warning: Unable to find Pokétwo bot to lock it out, check that the bot is a member of the server! Otherwise, I may be missing some permissions.")
                             return
                         ## Check if it's a rare or regional ping first
                         if keyword == "rare ping":
-                            rare_lock = server_config.get('rare_lock', {})
+                            rare_lock = server_config.get('rare_lock', {'duration': default_rare_lock_duration, 'permanent_lock': True})
                             if rare_lock.get('permanent_lock', False):
                                 print(f'{message.guild.name} - {message.channel.name} - rare locking until manually unlocked')
                                 lock_duration = None
@@ -253,7 +252,7 @@ class ChannelManagement(commands.Cog):
                                 print(f'{message.guild.name} - {message.channel.name} - keyword checks complete, outcome is lock for {lock_duration} seconds, lock delay is {lock_delay} seconds')
                                 return
                         elif keyword == "regional ping":
-                            regional_lock = server_config.get('regional_lock', {})
+                            regional_lock = server_config.get('regional_lock', {'duration': default_regional_lock_duration, 'permanent_lock': False})
                             if regional_lock.get('permanent_lock', False):
                                 lock_duration = None
                                 print(f'{message.guild.name} - {message.channel.name} - regional locking until manually unlocked')
@@ -289,18 +288,25 @@ class ChannelManagement(commands.Cog):
                                     else:
                                         print(f'{message.guild.name} - {message.channel.name} - "{keyword}" found')
                                         if keyword == "shiny hunt pings":
-                                            shiny_lock = server_config.get('shiny_lock', {})
-                                            if shiny_lock.get('permanent_lock', False):
+                                            shiny_lock = server_config.get('shiny_lock', {'duration': default_shiny_lock_duration, 'permanent_lock': False})
+                                            
+                                            # Check if the shiny lock is permanent
+                                            if shiny_lock.get('permanent_lock'):
                                                 print(f'{message.guild.name} - {message.channel.name} - shiny locking until manually unlocked')
                                                 lock_duration = None
-                                            elif shiny_lock['value'] == 0:
+                                            
+                                            # Check if the shiny lock value is 0
+                                            elif shiny_lock.get('value') == 0:
                                                 print(f'Ignoring shiny hunt ping in {message.channel.name} on {message.guild.name}')
                                                 return
+                                            
+                                            # Otherwise, set the lock duration
                                             else:
                                                 lock_duration = shiny_lock.get('value', default_shiny_lock_duration)
-                                                print(f'{message.guild.name} - {message.channel.name} - shiny locking for default duration {default_shiny_lock_duration} seconds')
+                                                print(f'{message.guild.name} - {message.channel.name} - shiny locking for {lock_duration} seconds')
+
                                         else:
-                                            collection_lock = server_config.get('collection_lock', {})
+                                            collection_lock = server_config.get('collection_lock', {'duration': default_collection_lock_duration, 'permanent_lock': False})
                                             if collection_lock.get('permanent_lock', False):
                                                 lock_duration = None
                                                 print(f'{message.guild.name} - {message.channel.name} - collection locking until manually unlocked')
@@ -309,7 +315,7 @@ class ChannelManagement(commands.Cog):
                                                 return
                                             else:
                                                 lock_duration = collection_lock.get('value', default_collection_lock_duration)
-                                                print(f'{message.guild.name} - {message.channel.name} - collection locking for default duration {default_collection_lock_duration} seconds')
+                                                print(f'{message.guild.name} - {message.channel.name} - collection locking for {lock_duration} seconds')
                                         
                                         await self.lock_channel(message.channel, lock_duration, lock_delay)
                                         print(f'{message.guild.name} - {message.channel.name} - keyword checks complete, outcome is lock for {lock_duration} seconds, lock delay is {lock_delay} seconds')
