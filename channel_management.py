@@ -54,7 +54,13 @@ class ChannelManagement(commands.Cog):
         self.locked_channels = {}
         self.last_actioned_message = {}  # Dictionary to track last message timestamp for each channel
         self.load_locked_channels()
-        
+    
+    @commands.Cog.listener()
+    async def on_ready(self):
+        """Re-add views to messages and initialize locked channels when the bot restarts."""
+        await self.init_locked_channels()
+        Print("Initializing locked channels.")
+ 
     def get_server_config(self, guild_id):
         default_config = {
             'lock_delay': default_lock_delay,
@@ -81,6 +87,7 @@ class ChannelManagement(commands.Cog):
     def load_locked_channels(self):
         """Loads the locked channels from the config file."""
         self.locked_channels = config.get('locked_channels', {})
+        print("Locked channels have been loaded.")
 
     def save_locked_channels(self):
         """Saves the current locked channels to the config file."""
@@ -90,10 +97,62 @@ class ChannelManagement(commands.Cog):
             
     def remove_locked_channel(self, channel_id):
         """Removes a locked channel by its ID and updates the config file."""
-        if channel_id in self.locked_channels:
-            del self.locked_channels[channel_id]
+        print(self.locked_channels)  # Debug: Print the locked channels
+        print(f"Channel id: {channel_id} (Type: {type(channel_id)})")  # Debug: Print the channel_id and its type
+        
+        # Convert channel_id to a string for comparison
+        channel_id_str = str(channel_id)
+        
+        if channel_id_str in self.locked_channels:
+            del self.locked_channels[channel_id_str]
             self.save_locked_channels()
-    
+            print(f"Removed channel {channel_id_str} from locked_channels.")
+        else:
+            print(f"Channel {channel_id_str} not found in locked_channels.")
+
+    async def init_locked_channels(self):
+        """Reinitializes unlock timers for locked channels after the bot is ready."""
+        print(f"Initializing locked channels. Total channels: {len(self.locked_channels)}")
+
+        # Create a copy of the locked channels to avoid modifying the dictionary while iterating
+        locked_channels_copy = self.locked_channels.copy()
+
+        for channel_id, lock_data in locked_channels_copy.items():
+            print(f"Processing channel: {channel_id} with data: {lock_data}")
+            
+            unlock_time = lock_data.get('unlock_time')
+            try:
+                # Fetch the channel using its ID
+                channel = await self.bot.fetch_channel(int(channel_id))
+                print(f"Channel fetched: {channel.guild.name} - {channel.name}")
+            except discord.NotFound:
+                # If the channel no longer exists, remove it from locked_channels
+                print(f"Channel {channel_id} not found. Removing from locked channels.")
+                self.remove_locked_channel(channel_id)
+                continue
+            except Exception as e:
+                print(f"Error fetching channel {channel_id}: {e}")
+                continue
+
+            # If the unlock time is specified
+            if unlock_time:
+                remaining_duration = unlock_time - time.time()
+                print(f"Remaining duration for channel {channel_id}: {remaining_duration} seconds")
+                
+                if remaining_duration > 0:
+                    # Schedule auto-unlock for the remaining time
+                    print(f"Scheduling auto-unlock for channel {channel_id} in {remaining_duration} seconds.")
+                    self.bot.loop.create_task(self.auto_unlock_channel(channel, remaining_duration))
+                else:
+                    # Unlock the channel immediately if the unlock time has already passed
+                    print(f"Unlocking expired channel: {channel_id}")
+                    await self.unlock_channel(channel)
+                    await channel.send("The channel has been automatically unlocked due to inactivity. The spawn is now free-for-all to catch.")
+            else:
+                # Permanent lock; just log this status
+                print(f"Channel {channel.guild.name} - {channel.name} has a permanent lock.")
+
+
     @commands.hybrid_command(name="lock", description="Locks the current channel you're in, if unlocked")
     async def lock(self, ctx):
         """Locks the current channel until manually unlocked."""
@@ -180,17 +239,21 @@ class ChannelManagement(commands.Cog):
             }
             self.save_locked_channels()
 
-    async def auto_unlock_channel(self, channel, delay):
-        await asyncio.sleep(delay)
+    async def auto_unlock_channel(self, channel, remaining_duration):
+        await asyncio.sleep(remaining_duration)
+
+        # Safely remove from locked channels
+        self.locked_channels = config.get('locked_channels', {})
         if channel.id in self.locked_channels:
             unlock_time = self.locked_channels[channel.id]['unlock_time']
             if unlock_time and datetime.now().timestamp() >= unlock_time:
                 await self.unlock_channel(channel)
                 await channel.send("The channel has been automatically unlocked due to inactivity. The spawn is now free-for-all to catch.")
                 print(f"{channel.guild.name} - {channel.name} - Channel was unlocked due to inactivity.")
-                del self.locked_channels[channel.id]
-            else:
-                print(f"{channel.guild.name} - {channel.name} - Channel unlock was scheduled, but another lock action occurred.")
+            self.remove_locked_channel()
+        else:
+            print(f"Channel {channel.id} not found in locked_channels. It might have been unlocked manually.")
+
     
     async def unlock_channel(self, channel):
         bot_member = channel.guild.get_member(poketwo_bot_id)
@@ -202,7 +265,7 @@ class ChannelManagement(commands.Cog):
             overwrite.read_messages = True
             overwrite.read_message_history = True
             await channel.set_permissions(bot_member, overwrite=overwrite)
-        self.remove_locked_channel(channel.id)
+            self.remove_locked_channel(channel.id)
     
     @commands.hybrid_command(name="unlock", description="Unlocks the current channel you're in, if locked")
     async def unlock(self, ctx):

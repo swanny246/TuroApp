@@ -17,11 +17,27 @@ intents.messages = True
 intents.message_content = True  # Enable the message content intent
 intents.members = True
 bot = commands.Bot(command_prefix="!", intents=intents)
+version = "1.4beta"
 
 @bot.event
 async def on_ready():
     print(f'Logged in as {bot.user}')
-    await bot.change_presence(activity=discord.CustomActivity(name='Turov1.2.3' ,emoji='🖥️'))
+    await bot.change_presence(activity=discord.CustomActivity(name=f'I am not a bot. Turov{version}', emoji='🖥️'))
+
+    # Replace with your server's channel ID
+    channel_id = 1090904218031882250  # Replace this with the ID of your desired channel
+    channel = bot.get_channel(channel_id)
+    
+    if channel:
+        try:
+            await channel.send(f":white_check_mark: {bot.user.name} is now online!")
+            print(f"Online notification sent to channel {channel.guild.name} - {channel.name}.")
+        except Exception as e:
+            print(f"Failed to send notification: {e}")
+    else:
+        print(f"Channel with ID {channel_id} not found.")
+
+
 
 @bot.hybrid_command()
 @commands.has_guild_permissions(manage_guild=True)
