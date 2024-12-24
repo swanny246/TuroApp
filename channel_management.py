@@ -199,10 +199,10 @@ class ChannelManagement(commands.Cog):
                 if lock_duration:
                     unlock_time = datetime.now() + timedelta(seconds=lock_duration)
                     unlock_timestamp = int(unlock_time.timestamp())
-                    await countdown_message.edit(content=f"The channel has been locked, it will unlock at <t:{unlock_timestamp}>.", view=view)
+                    await countdown_message.edit(content=f"The channel has been locked, it will unlock at <t:{unlock_timestamp}>. Use the button or send ``!unlock`` to unlock it!", view=view)
                     unlock_time_value = unlock_time.timestamp()
                 else:
-                    await countdown_message.edit(content=f"The channel has been locked, it will stay locked until someone unlocks manually.", view=view)
+                    await countdown_message.edit(content=f"The channel has been locked, it will stay locked until someone unlocks manually. Use the button or send ``!unlock`` to unlock it!", view=view)
                     unlock_time_value = None
 
                 self.locked_channels[channel.id] = {
@@ -230,7 +230,7 @@ class ChannelManagement(commands.Cog):
             view = UnlockView(channel, self)
 
             # Notify the channel that it has been locked and add the unlock button
-            countdown_message = await channel.send("The channel has been locked.", view=view)
+            countdown_message = await channel.send("The channel has been locked. Use the button or send ``!unlock`` to unlock it!", view=view)
 
             self.locked_channels[channel.id] = {
                 'message_id': countdown_message.id,
