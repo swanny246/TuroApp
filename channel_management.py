@@ -36,9 +36,11 @@ class UnlockView(View):
     @discord.ui.button(label="Unlock", style=discord.ButtonStyle.danger, emoji="\U0001f512")
     async def unlock_button(self, interaction: discord.Interaction, button: Button):
         # Unlock the channel
+        print("Unlocking channel")
         await self.channel_management.unlock_channel(self.channel)
         
         # Remove the channel ID from locked_channels using the instance of ChannelManagement
+        print("Removing locked channel from json")
         self.channel_management.remove_locked_channel(self.channel.id)
         
         # Update the button to show it has been used
@@ -60,7 +62,21 @@ class ChannelManagement(commands.Cog):
     async def on_ready(self):
         """Re-add views to messages and initialize locked channels when the bot restarts."""
         await self.init_locked_channels()
-        Print("Initializing locked channels.")
+        for channel_id, lock_data in self.locked_channels.items():
+            channel = self.bot.get_channel(int(channel_id))
+            if not channel:
+                print(f"Channel {channel_id} not found, skipping.")
+                continue
+
+            try:
+                message = await channel.fetch_message(lock_data['message_id'])
+                view = UnlockView(channel, self)
+                await message.edit(view=view)
+                print(f"Re-attached UnlockView to message {lock_data['message_id']} in channel {channel_id}.")
+            except discord.NotFound:
+                print(f"Message {lock_data['message_id']} in channel {channel_id} not found, skipping.")
+            except Exception as e:
+                print(f"Error re-attaching view to message {lock_data['message_id']} in channel {channel_id}: {e}")
  
     def get_server_config(self, guild_id):
         default_config = {
@@ -89,7 +105,7 @@ class ChannelManagement(commands.Cog):
         """Loads the locked channels from the config file."""
         raw_locked_channels = config.get('locked_channels', {})
         self.locked_channels = {str(key): value for key, value in raw_locked_channels.items()}
-        print(f"Locked channels loaded: {self.locked_channels}")
+        print(f"Locked channels reloaded: {self.locked_channels}")
 
 
     def save_locked_channels(self):
@@ -105,12 +121,11 @@ class ChannelManagement(commands.Cog):
         """Removes a locked channel by its ID and updates the config file."""
         channel_id_str = str(channel_id)
         print(f"Removing channel_id: {channel_id_str} (Type: {type(channel_id_str)})")
-        #print(f"Current locked_channels: {self.locked_channels}")
-
+        self.load_locked_channels()       
         if channel_id_str in self.locked_channels:
             del self.locked_channels[channel_id_str]
+            print(f"Channel {channel_id_str} removed from locked_channels.")
             self.save_locked_channels()
-            print(f"Channel {channel_id_str} removed.")
         else:
             print(f"Channel {channel_id_str} not found in locked_channels.")
 
@@ -211,8 +226,6 @@ class ChannelManagement(commands.Cog):
                     unlock_time_value = None
 
                 self.locked_channels[channel.id] = {
-                    'message_id': countdown_message.id,
-                    'channel_id': channel.id,
                     'unlock_time': unlock_time_value
                 }
                 self.save_locked_channels()
@@ -238,8 +251,6 @@ class ChannelManagement(commands.Cog):
             countdown_message = await channel.send("The channel has been locked. Use the button or send ``!unlock`` to unlock it!", view=view)
 
             self.locked_channels[channel.id] = {
-                'message_id': countdown_message.id,
-                'channel_id': channel.id,
                 'unlock_time': None  # Permanent lock
             }
             self.save_locked_channels()
@@ -249,7 +260,6 @@ class ChannelManagement(commands.Cog):
 
         # Safely remove from locked channels
         self.locked_channels = config.get('locked_channels', {})
-        print(self.locked_channels)
         channel_id_str = str(channel.id)
         if channel_id_str in self.locked_channels:
             unlock_time = self.locked_channels[channel_id_str]['unlock_time']
@@ -257,21 +267,31 @@ class ChannelManagement(commands.Cog):
                 await self.unlock_channel(channel)
                 await channel.send("The channel has been automatically unlocked due to inactivity. The spawn is now free-for-all to catch.")
                 print(f"{channel.guild.name} - {channel.name} - Channel was unlocked due to inactivity.")
-                self.remove_locked_channel(channel_id_str)
         else:
             print(f"Channel {channel.id} not found in locked_channels. It might have been unlocked manually.")
 
     
     async def unlock_channel(self, channel):
+        """Unlocks the channel and cleans up related tasks."""
         bot_member = channel.guild.get_member(poketwo_bot_id)
         if bot_member is None:
-            await channel.send(":warning: Unable to find Pokétwo bot to let it back in, check that the bot is a member of the server! Otherwise, I may be missing some permissions.")
+            await channel.send(
+                ":warning: Unable to find Pokétwo bot to let it back in. Check that the bot is a member of the server! Otherwise, I may be missing some permissions."
+            )
         else:
+            # Restore permissions for the Pokétwo bot
             overwrite = channel.overwrites_for(bot_member)
             overwrite.send_messages = True
             overwrite.read_messages = True
             overwrite.read_message_history = True
             await channel.set_permissions(bot_member, overwrite=overwrite)
+
+        # Remove the channel from locked channels
+        self.remove_locked_channel(channel.id)
+
+        # Log unlock action
+        print(f"Channel {channel.id} has been manually unlocked.")
+
     
     @commands.hybrid_command(name="unlock", description="Unlocks the current channel you're in, if locked")
     async def unlock(self, ctx):
@@ -295,7 +315,6 @@ class ChannelManagement(commands.Cog):
             keywords = ["shiny hunt pings", "collection pings", "rare ping", "regional ping"] # in order of priority of pings
             server_config = self.get_server_config(message.guild.id)
             lock_delay = server_config.get('lock_delay', default_lock_delay)
-            #print(f'{message.guild.name} - {message.channel.name} - Lock delay: {lock_delay}')
             has_permissions = False
 
             for line in lines:

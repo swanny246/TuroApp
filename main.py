@@ -17,7 +17,7 @@ intents.messages = True
 intents.message_content = True  # Enable the message content intent
 intents.members = True
 bot = commands.Bot(command_prefix="!", intents=intents)
-version = "1.4beta"
+version = "1.5"
 
 @bot.event
 async def on_ready():
