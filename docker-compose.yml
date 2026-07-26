@@ -1,0 +1,9 @@
+services:
+  turo:
+    build: .
+    container_name: turo
+    restart: unless-stopped
+    # config.json is bind-mounted so the bot can read your token and persist
+    # runtime changes (locked channels, per-server settings) back to the host.
+    volumes:
+      - ./config.json:/app/config.json
