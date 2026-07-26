@@ -1,0 +1,31 @@
+{
+    "_comment_readme": "Copy this file to config.json (cp config.example.json config.json) and fill in the values below. The keys starting with an underscore are comments — the bot ignores them, so you can leave them in or delete them. IDs must be numbers (no quotes); the token must be a string (in quotes).",
+
+    "_comment_token": "Your Discord bot token from the Developer Portal (Bot > Reset Token). Keep this secret — never commit config.json.",
+    "token": "YOUR_BOT_TOKEN_HERE",
+
+    "_comment_owner": "Your own Discord user ID. Only this user can run the `restart` command. Enable Developer Mode in Discord, then right-click your name > Copy User ID.",
+    "owner": 123456789012345678,
+
+    "_comment_poketwo_bot_id": "The Poketwo bot's user ID (the game bot whose spawns are tracked). The value below is Poketwo's public ID and usually does not need changing.",
+    "poketwo_bot_id": 716390085896962058,
+
+    "_comment_trackers": "User IDs of the tracker bots the bot listens to for hunt pings. Set these to the PokeName, Poketox and P2 Assistant bot IDs in your server.",
+    "pokename": 111111111111111111,
+    "poketox": 222222222222222222,
+    "p2assistant": 333333333333333333,
+
+    "_comment_lock_delay": "Seconds to wait before locking a channel after a hunt is detected. 0 = lock immediately. This is a global default and can be overridden per server with /set_lock_delay.",
+    "lock_delay": 0,
+
+    "_comment_durations": "How long (in seconds) to keep a channel locked for each hunt type. 3600 = 1 hour. These are global defaults; override them per server with the matching /set_ slash commands.",
+    "shiny_lock_duration": 3600,
+    "regional_lock_duration": 3600,
+    "collection_lock_duration": 3600,
+
+    "_comment_server_configs": "Per-server overrides. Leave this as an empty object — the bot fills it in automatically when you use the /set_ commands.",
+    "server_configs": {},
+
+    "_comment_locked_channels": "Runtime state for channels the bot has locked. Leave this as an empty object — the bot manages it itself.",
+    "locked_channels": {}
+}
